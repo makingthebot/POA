@@ -1,3 +1,4 @@
+import re
 from pydantic import BaseModel, BaseSettings, validator, root_validator
 from typing import Literal
 import os
@@ -139,6 +140,7 @@ def get_extra_order_info(order_info):
         "is_sell": None,
         "is_tp_order": None,
         "is_sl_order": None,
+        "is_change_sl": None,
     }
     if order_info["exchange"] in CRYPTO_EXCHANGES:
         extra_order_info["is_crypto"] = True
@@ -149,30 +151,36 @@ def get_extra_order_info(order_info):
 
     elif order_info["exchange"] in STOCK_EXCHANGES:
         extra_order_info["is_stock"] = True
-    #if order_info["type"] == "limit":
-    #    extra_order_info["is_limit"] = True
-    #if order_info["use_tp1"] or order_info["use_tp2"] or order_info["use_tp3"] or order_info["use_tp4"]:
-    #    extra_order_info["is_tp_order"] = True
-    #if order_info["use_sl"]:
-    #    extra_order_info["is_sl_order"] = True
-    if order_info["side"] in ("entry/buy", "entry/sell"):
-        extra_order_info["is_entry"] = True
-        _side = order_info["side"].split("/")[-1]
-        if _side == "buy":
+
+    if order_info.get("type") == "limit":
+        extra_order_info["is_limit"] = True
+    if any(order_info.get(f"use_tp{i}") for i in range(1, 5)):
+        extra_order_info["is_tp_order"] = True
+    if order_info.get("use_sl"):
+        extra_order_info["is_sl_order"] = True
+    if order_info.get("type") == "change_sl":
+        extra_order_info["is_change_sl"] = True
+        return extra_order_info
+    if "side" in order_info:
+        if order_info["side"] in ("entry/buy", "entry/sell"):
+            extra_order_info["is_entry"] = True
+            _side = order_info["side"].split("/")[-1]
+            if _side == "buy":
+                extra_order_info["is_buy"] = True
+            elif _side == "sell":
+                extra_order_info["is_sell"] = True
+        elif order_info["side"] in ("close/buy", "close/sell"):
+            extra_order_info["is_close"] = True
+            _side = order_info["side"].split("/")[-1]
+            if _side == "buy":
+                extra_order_info["is_buy"] = True
+            elif _side == "sell":
+                extra_order_info["is_sell"] = True
+        elif order_info["side"] == "buy":
             extra_order_info["is_buy"] = True
-        elif _side == "sell":
+        elif order_info["side"] == "sell":
             extra_order_info["is_sell"] = True
-    elif order_info["side"] in ("close/buy", "close/sell"):
-        extra_order_info["is_close"] = True
-        _side = order_info["side"].split("/")[-1]
-        if _side == "buy":
-            extra_order_info["is_buy"] = True
-        elif _side == "sell":
-            extra_order_info["is_sell"] = True
-    elif order_info["side"] == "buy":
-        extra_order_info["is_buy"] = True
-    elif order_info["side"] == "sell":
-        extra_order_info["is_sell"] = True
+
 
     return extra_order_info
 
@@ -196,7 +204,7 @@ class OrderRequest(BaseModel):
     base: str
     quote: QUOTE_LITERAL
     # QUOTE
-    type: Literal["market", "limit"] = "market"
+    type: Literal["market", "limit", "change_sl"] = "market"
     side: SIDE_LITERAL
     amount: float | None = None
     price: float | None = None
@@ -218,6 +226,7 @@ class OrderRequest(BaseModel):
     is_entry: bool | None = None
     is_limit: bool | None = None
     is_close: bool | None = None
+    is_change_sl: bool | None = None
     use_tp1: bool | None = None
     use_tp2: bool | None = None
     use_tp3: bool | None = None
@@ -253,7 +262,10 @@ class OrderRequest(BaseModel):
 
         values |= get_extra_order_info(values)
 
-        values["side"] = parse_side(values["side"])
+        # 'side'가 있을 때만 처리
+        if 'side' in values and values['side'] is not None:
+            values["side"] = parse_side(values["side"])
+
         values["quote"] = parse_quote(values["quote"])
         base = values["base"]
         quote = values["quote"]

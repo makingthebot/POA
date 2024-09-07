@@ -131,10 +131,12 @@ def retry(
     instance: Binance | Bybit | Bitget | Upbit | Okx = None,
 ):
     attempts = 0
+    print('오더 호출 4')
 
     while attempts < max_attempts:
         try:
             result = func(*args)  # 함수 실행
+            print('오더 호출 5')
             return result
         except Exception as e:
             logger.error(f"에러 발생: {str(e)}")

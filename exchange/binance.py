@@ -68,14 +68,16 @@ class Binance:
     def change_sl_order(self, order_info: ChangeSLOrder):
         
         try:
+            print("Changing SL order")
             symbol = order_info.unified_symbol
             position = self.get_position(symbol)
+            print(f"Position: {position}")
             if not position or position['amount'] == 0:
                 print(f"No open position for {symbol}")
                 return None
             
             stop_orders = self.get_stop_orders(symbol)
-            
+            print(f"Stop orders: {stop_orders}")
             for order in stop_orders:
                 self.cancel_order(order['id'], symbol)
                 print(f"Cancelled existing stop order: {order['id']}")
@@ -360,7 +362,7 @@ class Binance:
 
         # self.client.options["defaultType"] = "swap"
         symbol = self.order_info.unified_symbol  # self.parse_symbol(base, quote)
-
+        print('order 호출 1')
         entry_amount = self.get_amount(order_info)
         use_tp1 = order_info.use_tp1
         use_tp2 = order_info.use_tp2
@@ -405,10 +407,7 @@ class Binance:
         (order_info.use_tp4, order_info.tp4_price, order_info.tp4_qty_percent),
     ]
 
-        if use_sl:
-            sl_price = order_info.sl_price
-        else:
-            sl_price = None
+        sl_price = order_info.sl_price
         if entry_amount == 0:
             raise error.MinAmountError()
         if self.position_mode == "one-way":
@@ -429,6 +428,7 @@ class Binance:
             self.set_leverage(order_info.leverage, symbol)
 
         try:
+            print('order 호출 2')
             result = retry(
                 self.client.create_order,
                 symbol,
@@ -442,25 +442,12 @@ class Binance:
                 delay=0.1,
                 instance=self,
             )
-        
+            print(result)
+            time.sleep(1)
+            print('order 호출 3')
             try:
-                # 메인 주문 생성
-                result = retry(
-                    self.client.create_order,
-                    symbol,
-                    order_info.type.lower(),
-                    order_info.side,
-                    abs(entry_amount),
-                    None,
-                    params,
-                    order_info=order_info,
-                    max_attempts=10,
-                    delay=0.1,
-                    instance=self,
-                )
-
                 # TP 주문 생성 (reduce-only)
-                
+                tp_count = 0
                 for use_tp, tp_price, tp_qty_percent in tp_data:
                     if use_tp and tp_price and tp_qty_percent:
                         tp_side = "sell" if order_info.side == "buy" else "buy"
@@ -468,7 +455,8 @@ class Binance:
                         tp_amount = abs(entry_amount) * (tp_qty_percent / 100)  # 백분율을 소수로 변환
 
                         tp_order = self.create_order_with_retry(symbol, tp_side, tp_amount, tp_price)
-                        print(tp_order)
+                        tp_count += 1
+                        print(f"tp {tp_count} tp_order : {tp_order}")
 
 
 
@@ -476,6 +464,7 @@ class Binance:
                 raise error.OrderError(e, self.order_info)
             try:
                 # SL 주문 생성 (reduce-only)
+                print('SL 주문 생성')
                 if sl_price:
                     sl_side = "sell" if order_info.side == "buy" else "buy"
                     sl_params = {
@@ -518,7 +507,7 @@ class Binance:
                 order_info.type.lower(),
                 order_info.side,
                 abs(entry_amount),
-                order_info.price,  # 리밋 주문에서는 가격을 지정합니다
+                order_info.price,  # 리밋 주문에서는 가격을 지정
                 params,
                 order_info=order_info,
                 max_attempts=10,

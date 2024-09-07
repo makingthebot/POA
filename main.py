@@ -1,3 +1,4 @@
+import trace
 from fastapi.exception_handlers import (
     request_validation_exception_handler,
 )
@@ -27,7 +28,7 @@ import ipaddress
 import os
 import sys
 
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 app = FastAPI(default_response_class=ORJSONResponse)
 
 
@@ -151,31 +152,32 @@ async def order(order_info: Union[MarketOrder, ChangeSLOrder], background_tasks:
         bot.init_info(order_info)
 
 
-        if isinstance(order_info, MarketOrder):
-            if bot.order_info.is_crypto:
-                if bot.order_info.is_limit:
-                    order_result = bot.limit_order(bot.order_info)
-                elif bot.order_info.is_entry:
+        if bot.order_info.is_crypto:
+            if bot.order_info.is_entry:
+                try:
                     order_result = bot.market_entry(bot.order_info)
-                elif bot.order_info.is_close:
-                    order_result = bot.market_close(bot.order_info)
-                elif bot.order_info.is_buy:
-                    order_result = bot.market_buy(bot.order_info)
-                elif bot.order_info.is_sell:
-                    order_result = bot.market_sell(bot.order_info)
-                background_tasks.add_task(log, exchange_name, order_result, order_info)
-            elif bot.order_info.is_stock:
-                order_result = bot.create_order(
-                    bot.order_info.exchange,
-                    bot.order_info.base,
-                    order_info.type.lower(),
-                    order_info.side.lower(),
-                    order_info.amount,
-                )
-            elif isinstance(order_info, ChangeSLOrder):
-                # 여기에 change_sl_order 처리 로직을 추가합니다.
-                order_result = bot.change_sl_order(order_info.new_sl)
-            background_tasks.add_task(log, exchange_name, order_result, order_info)
+                except Exception as e:
+                    print(e)
+                    traceback.print_exc()
+            elif bot.order_info.is_close:
+                order_result = bot.market_close(bot.order_info)
+            elif bot.order_info.is_buy:
+                order_result = bot.market_buy(bot.order_info)
+            elif bot.order_info.is_sell:
+                order_result = bot.market_sell(bot.order_info)
+            #background_tasks.add_task(log, exchange_name, order_result, order_info)
+        elif bot.order_info.is_stock:
+            order_result = bot.create_order(
+                bot.order_info.exchange,
+                bot.order_info.base,
+                order_info.type.lower(),
+                order_info.side.lower(),
+                order_info.amount,
+            )
+        elif isinstance(order_info, ChangeSLOrder):
+            # 여기에 change_sl_order 처리 로직을 추가합니다.
+            order_result = bot.change_sl_order(order_info)
+        background_tasks.add_task(log, exchange_name, order_result, order_info)
 
     except TypeError as e:
         error_msg = get_error(e)
@@ -239,7 +241,7 @@ async def hedge(hedge_data: HedgeData, background_tasks: BackgroundTasks):
         try:
             if amount is None:
                 raise Exception("헷지할 수량을 요청하세요")
-            binance_order_result = bot.market_entry(foreign_order_info)
+            binance_order_result = await bot.market_entry(foreign_order_info)
             binance_order_amount = binance_order_result["amount"]
             pocket.create(
                 "kimp",

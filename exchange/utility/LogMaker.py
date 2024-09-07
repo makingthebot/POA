@@ -246,6 +246,7 @@ def print_alert_message(order_info: MarketOrder, result="성공"):
 
 def log_alert_message(order_info: MarketOrder, result="성공"):
     # discrod
+    print("주문 들어감. ")
     embed = Embed(
         title=order_info.order_name,
         description="[웹훅 alert_message]",
