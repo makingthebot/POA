@@ -28,7 +28,7 @@ import ipaddress
 import os
 import sys
 
-VERSION = "0.1.1"
+VERSION = "0.1.3"
 app = FastAPI(default_response_class=ORJSONResponse)
 
 
@@ -98,17 +98,33 @@ async def whitelist_middleware(request: Request, call_next):
         return response
 
 
+#@app.exception_handler(RequestValidationError)
+#async def validation_exception_handler(request, exc):
+#    msgs = [
+#        f"[에러{index+1}] " + f"{error.get('msg')} \n{error.get('loc')}"
+#        for index, error in enumerate(exc.errors())
+#        if error.get('loc') != ('body',)
+#    ]
+#    message = "[Error]\n"
+#    for msg in msgs:
+#        message = message + msg + "\n"
+#    if msgs:  # 에러 메시지가 있을 때만 로깅
+#        log_validation_error_message(f"{message}\n {exc.body}")
+#    return await request_validation_exception_handler(request, exc)
+
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request, exc):
-    msgs = [
-        f"[에러{index+1}] " + f"{error.get('msg')} \n{error.get('loc')}"
-        for index, error in enumerate(exc.errors())
-    ]
-    message = "[Error]\n"
-    for msg in msgs:
-        message = message + msg + "\n"
+    try:
+        msgs = [
+            f"[에러{index+1}] {error.get('msg', 'Unknown error')}\n{'.'.join(map(str, error.get('loc', [])))}"
+            for index, error in enumerate(exc.errors())
+        ]
+        message = "[Error]\n" + "\n".join(msgs)
 
-    log_validation_error_message(f"{message}\n {exc.body}")
+        if msgs:  # 에러 메시지가 있을 때만 로깅
+            log_validation_error_message(f"{message}\n요청 바디: {exc.body}")
+    except Exception as e:
+        log_error_message(traceback.format_exc(), "유효성 검사 에러")
     return await request_validation_exception_handler(request, exc)
 
 
@@ -153,18 +169,31 @@ async def order(order_info: Union[MarketOrder, ChangeSLOrder], background_tasks:
 
 
         if bot.order_info.is_crypto:
-            if bot.order_info.is_entry:
-                try:
-                    order_result = bot.market_entry(bot.order_info)
-                except Exception as e:
-                    print(e)
-                    traceback.print_exc()
-            elif bot.order_info.is_close:
-                order_result = bot.market_close(bot.order_info)
-            elif bot.order_info.is_buy:
-                order_result = bot.market_buy(bot.order_info)
-            elif bot.order_info.is_sell:
-                order_result = bot.market_sell(bot.order_info)
+            try:
+                print('order_info :⭐️ ', order_info)
+                if (bot.order_info.is_change_sl is not None) :
+                    print("change_sl_order❗️❤️")
+                    order_result = bot.change_sl_order(bot.order_info)
+                    background_tasks.add_task(log, exchange_name, order_result, order_info)
+                    return {"result": "success"}
+                elif bot.order_info.is_entry:
+                    print(f"is_change_sl 🦈🦈: {bot.order_info.is_change_sl}")
+                    try:
+                        order_result = bot.market_entry(bot.order_info)
+                    except Exception as e:
+                        print(e)
+                        traceback.print_exc()
+                elif bot.order_info.is_close:
+                    order_result = bot.market_close(bot.order_info)
+                elif bot.order_info.is_buy:
+                    order_result = bot.market_buy(bot.order_info)
+                elif bot.order_info.is_sell:
+                    order_result = bot.market_sell(bot.order_info)
+            except Exception as e:
+                error_msg = get_error(e)
+                background_tasks.add_task(
+                    log_error, "\n".join(error_msg), order_info
+                )
             #background_tasks.add_task(log, exchange_name, order_result, order_info)
         elif bot.order_info.is_stock:
             order_result = bot.create_order(

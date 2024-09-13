@@ -139,11 +139,15 @@ def log_order_message(exchange_name, order_result: dict, order_info: MarketOrder
                 side = "숏 종료"
             elif order_info.is_sell:
                 side = "롱 종료"
+        elif order_info.is_change_sl:
+            side = "SL 변경"
     else:
         if order_info.is_buy:
             side = "매수"
         elif order_info.is_sell:
             side = "매도"
+        
+        
 
     if exchange_name in STOCK_EXCHANGES:  # ("KRX", "NASDAQ", "NYSE", "AMEX"):
         content = f"일시\n{date}\n\n거래소\n{exchange_name}\n\n티커\n{order_info.base}\n\n거래유형\n{side}\n\n{amount}"

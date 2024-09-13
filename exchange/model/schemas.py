@@ -151,15 +151,22 @@ def get_extra_order_info(order_info):
 
     elif order_info["exchange"] in STOCK_EXCHANGES:
         extra_order_info["is_stock"] = True
-
-    if order_info.get("type") == "limit":
-        extra_order_info["is_limit"] = True
-    if any(order_info.get(f"use_tp{i}") for i in range(1, 5)):
-        extra_order_info["is_tp_order"] = True
-    if order_info.get("use_sl"):
-        extra_order_info["is_sl_order"] = True
-    if order_info.get("type") == "change_sl":
-        extra_order_info["is_change_sl"] = True
+    try:
+        if order_info.get("type") == "limit":
+            extra_order_info["is_limit"] = True
+        if any(order_info.get(f"use_tp{i}") for i in range(1, 5)):
+            extra_order_info["is_tp_order"] = True
+        if order_info.get("use_sl"):
+            extra_order_info["is_sl_order"] = True
+            
+        if order_info.get("order_name", "").lower() in ["change sl order", "change_sl"]:
+            print("order_info order_name : ", order_info.get("order_name"))
+            print("🟡🟡change_sl. order_info", order_info)
+            extra_order_info["is_change_sl"] = True
+            return extra_order_info
+    except Exception as e:
+        print("🟡🟡error!! change_sl. order_info", order_info)
+        print("🟡🟡change_sl. e", e)
         return extra_order_info
     if "side" in order_info:
         if order_info["side"] in ("entry/buy", "entry/sell"):
@@ -205,7 +212,7 @@ class OrderRequest(BaseModel):
     quote: QUOTE_LITERAL
     # QUOTE
     type: Literal["market", "limit", "change_sl"] = "market"
-    side: SIDE_LITERAL
+    side: SIDE_LITERAL | None = None
     amount: float | None = None
     price: float | None = None
     cost: float | None = None

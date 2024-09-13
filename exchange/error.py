@@ -56,6 +56,7 @@ class ShortPositionNoneError(PositionNoneError):
 class OrderError(Exception):
     def __init__(self, msg="", order_info: MarketOrder = None, *args, **kwargs):
         side = ""
+        print('🐳🐳')
         if order_info is not None:
             if order_info.is_futures:
                 #try:

@@ -47,10 +47,14 @@ class Binance:
             if position['symbol'] == symbol:
                 return position
         return None
+    def is_stop_order(self, order):
+        order_type = order['type'].upper()
+        stop_types = ['STOP', 'STOP_MARKET', 'STOP_LOSS', 'STOP_LOSS_LIMIT', 'TAKE_PROFIT', 'TAKE_PROFIT_MARKET']
+        return order_type in stop_types or 'STOP' in order_type    
 
     def get_stop_orders(self, symbol):
         open_orders = self.client.fetch_open_orders(symbol)
-        return [order for order in open_orders if order['type'].lower() == 'stop']
+        return [order for order in open_orders if self.is_stop_order(order)]
 
     def cancel_order(self, order_id, symbol):
         return self.client.cancel_order(order_id, symbol)
@@ -64,6 +68,8 @@ class Binance:
             price=None, #이걸 , None이라고 하는 게 기존 코드였어서 그대로 사용. 혹시 에러가 발생하면, price로 교체. 
             params={'stopPrice': price, 'reduceOnly': True}
         )
+        
+
 
     def change_sl_order(self, order_info: ChangeSLOrder):
         
@@ -71,10 +77,12 @@ class Binance:
             print("Changing SL order")
             symbol = order_info.unified_symbol
             position = self.get_position(symbol)
+            position_amt = float(position['info'].get('positionAmt', 0))
             print(f"Position: {position}")
-            if not position or position['amount'] == 0:
+            if not position or position_amt == 0:
                 print(f"No open position for {symbol}")
                 return None
+
             
             stop_orders = self.get_stop_orders(symbol)
             print(f"Stop orders: {stop_orders}")
@@ -82,13 +90,13 @@ class Binance:
                 self.cancel_order(order['id'], symbol)
                 print(f"Cancelled existing stop order: {order['id']}")
                 
-            side = 'sell' if position['amount'] > 0 else 'buy'
+            side = 'sell' if position_amt > 0 else 'buy'
             new_stop_price = position['entryPrice']
             
             new_stop_order = self.create_stop_order(
                 symbol,
                 side,
-                position['amount'],
+                abs(position_amt),
                 new_stop_price
             )
             
@@ -103,7 +111,7 @@ class Binance:
     def create_sl_order_with_retry(self, symbol, sl_side, entry_amount, sl_price, params):
         max_retries = 5
         retry_delay = 0.2
-
+        print('SL 주문 생성 retry 로직. sl_side : ', sl_side)
         for attempt in range(max_retries):
             try:
                 sl_order = self.client.create_order(
@@ -445,6 +453,10 @@ class Binance:
             print(result)
             time.sleep(1)
             print('order 호출 3')
+            tp1_qty = round(abs(entry_amount) * (tp1_qty_percent / 100),2)  # 백분율을 소수로 변환
+            tp2_qty = round(abs(entry_amount) * (tp2_qty_percent / 100),2)  # 백분율을 소수로 변환
+            tp3_qty = round(abs(entry_amount) * (tp3_qty_percent / 100),2)  # 백분율을 소수로 변환
+            tp4_qty = round(entry_amount - tp1_qty - tp2_qty - tp3_qty,3)
             try:
                 # TP 주문 생성 (reduce-only)
                 tp_count = 0
