@@ -453,10 +453,19 @@ class Binance:
             print(result)
             time.sleep(1)
             print('order 호출 3')
-            tp1_qty = round(abs(entry_amount) * (tp1_qty_percent / 100),2)  # 백분율을 소수로 변환
-            tp2_qty = round(abs(entry_amount) * (tp2_qty_percent / 100),2)  # 백분율을 소수로 변환
-            tp3_qty = round(abs(entry_amount) * (tp3_qty_percent / 100),2)  # 백분율을 소수로 변환
-            tp4_qty = round(entry_amount - tp1_qty - tp2_qty - tp3_qty,3)
+            tp1_qty = 0.0
+            tp2_qty = 0.0
+            tp3_qty = 0.0
+            tp4_qty = 0.0
+            
+            if tp1_qty_percent is not None:
+                tp1_qty = round(abs(entry_amount) * (tp1_qty_percent / 100),2)  # 백분율을 소수로 변환
+            if tp2_qty_percent is not None:
+                tp2_qty = round(abs(entry_amount) * (tp2_qty_percent / 100),2)  # 백분율을 소수로 변환
+            if tp3_qty_percent is not None:
+                tp3_qty = round(abs(entry_amount) * (tp3_qty_percent / 100),2)  # 백분율을 소수로 변환
+            if tp4_qty_percent is not None:
+                tp4_qty = round(abs(entry_amount - tp1_qty - tp2_qty - tp3_qty),3)
             try:
                 # TP 주문 생성 (reduce-only)
                 tp_count = 0
