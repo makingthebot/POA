@@ -92,17 +92,34 @@ class Binance:
                 
             side = 'sell' if position_amt > 0 else 'buy'
             new_stop_price = position['entryPrice']
-            
-            new_stop_order = self.create_stop_order(
-                symbol,
-                side,
-                abs(position_amt),
-                new_stop_price
-            )
-            
-            print(f"Created new stop order at entry price: {new_stop_price}")
-            return new_stop_order
+            try:
+                new_stop_order = self.create_stop_order(
+                    symbol,
+                    side,
+                    abs(position_amt),
+                    new_stop_price
+                )
+                
+                print(f"Created new stop order at entry price: {new_stop_price}")
+                return new_stop_order
 
+            except Exception as stop_order_error:
+                print(f"Failed to create new stop order: {str(stop_order_error)}")
+                print("Attempting to close position with market order")
+                
+                try:
+                    market_close_order = self.client.create_market_order(
+                        symbol=symbol,
+                        side=side,
+                        amount=abs(position_amt),
+                        params={'reduceOnly': True}
+                    )
+                    print(f"Closed position with market order: {market_close_order}")
+                    return market_close_order
+                except Exception as market_order_error:
+                    print(f"Failed to close position with market order: {str(market_order_error)}")
+                    raise
+        
         except Exception as e:
             print(f"Error in change_sl_order: {str(e)}")
             raise
@@ -377,7 +394,11 @@ class Binance:
         use_tp3 = order_info.use_tp3
         use_tp4 = order_info.use_tp4
         use_sl = order_info.use_sl
-
+        round_info = 2
+        if "SOL" in symbol:
+            round_info = 0
+        elif "BTC" in symbol:
+            round_info = 3
         if use_tp1:
             tp1_price = order_info.tp1_price
             tp1_qty_percent = order_info.tp1_qty_percent
@@ -453,35 +474,59 @@ class Binance:
             print(result)
             time.sleep(1)
             print('order 호출 3')
+            # 진입 주문이 성공적으로 실행된 후 기존 SL 주문 취소
+            cancelled_sl_orders = self.cancel_sl_order(symbol)
+            print(f"Cancelled SL orders: {cancelled_sl_orders}")
             tp1_qty = 0.0
             tp2_qty = 0.0
             tp3_qty = 0.0
             tp4_qty = 0.0
+            tp_quantities = [0.0, 0.0, 0.0, 0.0]
+            used_amount = 0.0
+        
             
-            if tp1_qty_percent is not None:
-                tp1_qty = round(abs(entry_amount) * (tp1_qty_percent / 100),2)  # 백분율을 소수로 변환
-            if tp2_qty_percent is not None:
-                tp2_qty = round(abs(entry_amount) * (tp2_qty_percent / 100),2)  # 백분율을 소수로 변환
-            if tp3_qty_percent is not None:
-                tp3_qty = round(abs(entry_amount) * (tp3_qty_percent / 100),2)  # 백분율을 소수로 변환
-            if tp4_qty_percent is not None:
-                tp4_qty = round(abs(entry_amount - tp1_qty - tp2_qty - tp3_qty),3)
+            tp_percentages = [order_info.tp1_qty_percent, order_info.tp2_qty_percent, order_info.tp3_qty_percent, order_info.tp4_qty_percent]
+            use_tp_flags = [use_tp1, use_tp2, use_tp3, use_tp4]
+            print(f"TP percentages: {tp_percentages}")
+            print(f"Use TP flags: {use_tp_flags}")
+            for i, (qty_percent, use_tp) in enumerate(zip(tp_percentages, use_tp_flags)):
+                if qty_percent is not None and use_tp:
+                    tp_qty = round(abs(entry_amount) * (qty_percent / 100), round_info)
+                    used_amount += tp_qty
+                    tp_quantities[i] = tp_qty
+                    print(f"TP{i+1} quantity: {tp_qty}")
+            
+            remaining_qty = abs(entry_amount) - used_amount
+            if remaining_qty > 0:
+                for i in range(3, -1, -1):
+                    if use_tp_flags[i]:
+                        tp_quantities[i] += remaining_qty
+                        print(f"Added remaining {remaining_qty} to TP{i+1}")
+                        break
+        
             try:
+                print(f"Final TP quantities: {tp_quantities}")
                 # TP 주문 생성 (reduce-only)
                 tp_count = 0
-                for use_tp, tp_price, tp_qty_percent in tp_data:
-                    if use_tp and tp_price and tp_qty_percent:
-                        tp_side = "sell" if order_info.side == "buy" else "buy"
-                        positionSide = "LONG" if order_info.side == "buy" else "SHORT"
-                        tp_amount = abs(entry_amount) * (tp_qty_percent / 100)  # 백분율을 소수로 변환
 
-                        tp_order = self.create_order_with_retry(symbol, tp_side, tp_amount, tp_price)
+                for use_tp, tp_price, tp_qty in zip(use_tp_flags, tp_data, tp_quantities):
+                    print(f"Processing TP: use_tp={use_tp}, tp_price={tp_price}, tp_qty={tp_qty}")
+                    tp_price = tp_price[1] if isinstance(tp_price, tuple) else tp_price
+                    if use_tp and tp_price and tp_qty > 0:
+                        tp_side = "buy" if order_info.side == "sell" else "sell"
+                        positionSide = "SHORT" if order_info.side == "sell" else "LONG"
+                        tp_params = {
+                            "reduceOnly": True,
+                            "positionSide": positionSide
+                        }
+                        print(f"Creating TP order: side={tp_side}, qty={tp_qty}, price={tp_price}, params={tp_params}")
+                        tp_order = self.create_order_with_retry(symbol, tp_side, tp_qty, tp_price)
                         tp_count += 1
-                        print(f"tp {tp_count} tp_order : {tp_order}")
-
-
-
+                        print(f"TP {tp_count} order created: {tp_order}")
+                    else:
+                        print(f"Skipping TP order: use_tp={use_tp}, tp_price={tp_price}, tp_qty={tp_qty}")
             except Exception as e:
+                print(f"Error creating TP orders: {e}")
                 raise error.OrderError(e, self.order_info)
             try:
                 # SL 주문 생성 (reduce-only)
@@ -493,7 +538,6 @@ class Binance:
                         "positionSide": params.get("positionSide", None)
                     }
                     sl_order = self.create_sl_order_with_retry(symbol, sl_side, abs(entry_amount), sl_price, {'stopPrice': sl_price, 'reduceOnly': True})
-
             except Exception as e:
                 raise error.OrderError(e, self.order_info)
 
@@ -545,6 +589,37 @@ class Binance:
             return True
         else:
             return False
+
+    def cancel_sl_order(self, symbol):
+        try:
+            print(f"Cancelling SL orders for {symbol}")
+            
+            # 스톱 주문 조회
+            stop_orders = self.get_stop_orders(symbol)
+            print(f"Stop orders: {stop_orders}")
+            
+            cancelled_orders = []
+            if not stop_orders:
+                return cancelled_orders
+            for order in stop_orders:
+                try:
+                    self.cancel_order(order['id'], symbol)
+                    cancelled_orders.append(order['id'])
+                    print(f"Cancelled stop order: {order['id']}")
+                except Exception as cancel_error:
+                    print(f"Error cancelling stop order {order['id']}: {str(cancel_error)}")
+            
+            if cancelled_orders:
+                print(f"Successfully cancelled {len(cancelled_orders)} stop order(s) for {symbol}")
+            else:
+                print(f"No stop orders found to cancel for {symbol}")
+            
+            return cancelled_orders
+        
+        except Exception as e:
+            print(f"Error in cancel_sl_order: {str(e)}")
+            #raise e
+
 
     def market_sltp_order(
         self,
