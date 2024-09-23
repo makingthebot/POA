@@ -4,7 +4,7 @@ from fastapi.exception_handlers import (
 )
 from pprint import pprint
 from fastapi import FastAPI, Request, status, BackgroundTasks
-from fastapi.responses import ORJSONResponse, RedirectResponse, JSONResponse
+from fastapi.responses import ORJSONResponse, RedirectResponse
 from fastapi.exceptions import RequestValidationError
 import httpx
 from exchange.stock.kis import KoreaInvestment
@@ -65,7 +65,7 @@ whitelist = [
     "54.218.53.128",
     "52.32.178.7",
     "127.0.0.1",
-]
+    ]
 whitelist = whitelist + settings.WHITELIST
 
 
@@ -115,17 +115,6 @@ async def whitelist_middleware(request: Request, call_next):
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request, exc):
     try:
-        if any('body' in str(error) for error in exc.errors()):
-            return JSONResponse(
-                status_code=200,
-                content={"": ""}
-            )
-        if exc.body == b'{{strategy.order.alert_message}}':
-            # 이 경우 에러로 처리하지 않고 기본값으로 처리
-            return JSONResponse(
-                status_code=200,
-                content={"message": "Received TradingView placeholder. Processing with default values."}
-            )
         msgs = [
             f"[에러{index+1}] {error.get('msg', 'Unknown error')}\n{'.'.join(map(str, error.get('loc', [])))}"
             for index, error in enumerate(exc.errors())
@@ -133,7 +122,7 @@ async def validation_exception_handler(request, exc):
         message = "[Error]\n" + "\n".join(msgs)
 
         if msgs:  # 에러 메시지가 있을 때만 로깅
-            log_validation_error_message(f"{message}\ {exc.body}")
+            log_validation_error_message(f"{message}\n요청 바디: {exc.body}")
     except Exception as e:
         log_error_message(traceback.format_exc(), "유효성 검사 에러")
     return await request_validation_exception_handler(request, exc)
