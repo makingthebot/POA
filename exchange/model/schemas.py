@@ -1,6 +1,6 @@
 import re
 from pydantic import BaseModel, BaseSettings, validator, root_validator
-from typing import Literal
+from typing import Literal, Any
 import os
 from pathlib import Path
 from enum import Enum
@@ -159,10 +159,10 @@ def get_extra_order_info(order_info):
         if order_info.get("use_sl"):
             extra_order_info["is_sl_order"] = True
             
-        if order_info.get("order_name", "").lower() in ["change sl order", "change_sl"]:
-            print("order_info order_name : ", order_info.get("order_name"))
-            print("🟡🟡change_sl. order_info", order_info)
-            extra_order_info["is_change_sl"] = True
+        #if order_info.get("order_name", "").lower() in ["change sl order", "change_sl"]:
+        #    print("order_info order_name : ", order_info.get("order_name"))
+        #    print("🟡🟡change_sl. order_info", order_info)
+        #    extra_order_info["is_change_sl"] = True
             return extra_order_info
     except Exception as e:
         print("🟡🟡error!! change_sl. order_info", order_info)
@@ -249,7 +249,7 @@ class OrderRequest(BaseModel):
     use_sl: bool | None = None
     sl_price: float | None = None
     entry_candle : int | None = None
-    change_sl : float | None = None
+    change_sl : Any = None
     is_buy: bool | None = None
     is_sell: bool | None = None
     is_total: bool | None = None

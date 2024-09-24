@@ -91,6 +91,7 @@ class Binance:
                 print(f"Cancelled existing stop order: {order['id']}")
                 
             side = 'sell' if position_amt > 0 else 'buy'
+    
             new_stop_price = position['entryPrice']
             try:
                 new_stop_order = self.create_stop_order(

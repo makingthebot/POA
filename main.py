@@ -171,13 +171,13 @@ async def order(order_info: Union[MarketOrder, ChangeSLOrder], background_tasks:
         if bot.order_info.is_crypto:
             try:
                 print('order_info :⭐️ ', order_info)
-                if (bot.order_info.is_change_sl is not None) :
-                    print("change_sl_order❗️❤️")
-                    order_result = bot.change_sl_order(bot.order_info)
-                    background_tasks.add_task(log, exchange_name, order_result, order_info)
-                    return {"result": "success"}
-                elif bot.order_info.is_entry:
-                    print(f"is_change_sl 🦈🦈: {bot.order_info.is_change_sl}")
+                #if (bot.order_info.is_change_sl is not None) :
+                #    print("change_sl_order❗️❤️")
+                #    order_result = bot.change_sl_order(bot.order_info)
+                #    background_tasks.add_task(log, exchange_name, order_result, order_info)
+                #    return {"result": "success"}
+                if bot.order_info.is_entry:
+                    #print(f"is_change_sl 🦈🦈: {bot.order_info.is_change_sl}")
                     try:
                         order_result = bot.market_entry(bot.order_info)
                     except Exception as e:
@@ -203,9 +203,9 @@ async def order(order_info: Union[MarketOrder, ChangeSLOrder], background_tasks:
                 order_info.side.lower(),
                 order_info.amount,
             )
-        elif isinstance(order_info, ChangeSLOrder):
-            # 여기에 change_sl_order 처리 로직을 추가합니다.
-            order_result = bot.change_sl_order(order_info)
+        #elif isinstance(order_info, ChangeSLOrder):
+        #    # 여기에 change_sl_order 처리 로직을 추가합니다.
+        #    order_result = bot.change_sl_order(order_info)
         background_tasks.add_task(log, exchange_name, order_result, order_info)
 
     except TypeError as e:
