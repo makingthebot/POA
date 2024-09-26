@@ -528,11 +528,11 @@ class Binance:
                         print(f"Skipping TP order: use_tp={use_tp}, tp_price={tp_price}, tp_qty={tp_qty}")
             except Exception as e:
                 print(f"Error creating TP orders: {e}")
-                raise error.OrderError(e, self.order_info)
+                #raise error.OrderError(e, self.order_info)
             try:
                 # SL 주문 생성 (reduce-only)
-                print('SL 주문 생성')
                 if sl_price:
+                    print('SL 주문 생성')
                     sl_side = "sell" if order_info.side == "buy" else "buy"
                     sl_params = {
                         "reduceOnly": True,
@@ -668,6 +668,42 @@ class Binance:
         #     # 'stopIcebergQty': exchange.amount_to_precision(symbol, stop_iceberg_quantity),
         #     # 'newOrderRespType': 'ACK',  # ACK, RESULT, FULL
         # })
+        
+    def market_all_close(self, order_info: MarketOrder):
+        from exchange.pexchange import retry
+
+        symbol = self.order_info.unified_symbol
+        if self.position_mode == "one-way":
+            params = {"reduceOnly": True}
+        elif self.position_mode == "hedge":
+            if order_info.side == "buy":
+                if order_info.is_entry:
+                    positionSide = "LONG"
+                elif order_info.is_close:
+                    positionSide = "SHORT"
+            elif order_info.side == "sell":
+                if order_info.is_entry:
+                    positionSide = "SHORT"
+                elif order_info.is_close:
+                    positionSide = "LONG"
+            params = {"positionSide": positionSide}
+            
+        try:
+            return retry(
+                self.client.create_order,
+                symbol,
+                order_info.type.lower(),
+                order_info.side,
+                abs(order_info.amount),
+                None,
+                params,
+                order_info=order_info,
+                max_attempts=10,
+                delay=0.1,
+                instance=self,
+            )
+        except Exception as e:
+            raise error.OrderError(e, self.order_info)
 
     def market_close(
         self,

@@ -28,7 +28,7 @@ import ipaddress
 import os
 import sys
 
-VERSION = "0.1.3"
+VERSION = "0.1.5"
 app = FastAPI(default_response_class=ORJSONResponse)
 
 
@@ -65,7 +65,8 @@ whitelist = [
     "54.218.53.128",
     "52.32.178.7",
     "127.0.0.1",
-    ]
+    #"175.125.131.124",
+]
 whitelist = whitelist + settings.WHITELIST
 
 
@@ -121,8 +122,8 @@ async def validation_exception_handler(request, exc):
         ]
         message = "[Error]\n" + "\n".join(msgs)
 
-        if msgs:  # 에러 메시지가 있을 때만 로깅
-            log_validation_error_message(f"{message}\n요청 바디: {exc.body}")
+        #if msgs:  # 에러 메시지가 있을 때만 로깅
+        #    log_validation_error_message(f"{message}\n요청 바디: {exc.body}")
     except Exception as e:
         log_error_message(traceback.format_exc(), "유효성 검사 에러")
     return await request_validation_exception_handler(request, exc)
@@ -160,14 +161,12 @@ def log_error(error_message, order_info):
 
 @app.post("/order")
 @app.post("/")
-async def order(order_info: Union[MarketOrder, ChangeSLOrder], background_tasks: BackgroundTasks):
+def order(order_info: Union[MarketOrder, ChangeSLOrder], background_tasks: BackgroundTasks):
     order_result = None
     try:
         exchange_name = order_info.exchange
         bot = get_bot(exchange_name, order_info.kis_number)
         bot.init_info(order_info)
-
-
         if bot.order_info.is_crypto:
             try:
                 print('order_info :⭐️ ', order_info)
@@ -191,9 +190,10 @@ async def order(order_info: Union[MarketOrder, ChangeSLOrder], background_tasks:
                     order_result = bot.market_sell(bot.order_info)
             except Exception as e:
                 error_msg = get_error(e)
-                background_tasks.add_task(
-                    log_error, "\n".join(error_msg), order_info
-                )
+                if "value is not a valid" not in error_msg:
+                    background_tasks.add_task(
+                        log_error, "\n".join(error_msg), order_info
+                    )
             #background_tasks.add_task(log, exchange_name, order_result, order_info)
         elif bot.order_info.is_stock:
             order_result = bot.create_order(
@@ -210,12 +210,18 @@ async def order(order_info: Union[MarketOrder, ChangeSLOrder], background_tasks:
 
     except TypeError as e:
         error_msg = get_error(e)
-        background_tasks.add_task(
-            log_order_error_message, "\n".join(error_msg), order_info
-        )
+        if "value is not a valid" not in error_msg:
+            background_tasks.add_task(
+                log_error, "\n".join(error_msg), order_info
+            )
+
     except Exception as e:
         error_msg = get_error(e)
-        background_tasks.add_task(log_error, "\n".join(error_msg), order_info)
+        if "value is not a valid" not in error_msg:
+            background_tasks.add_task(
+                log_error, "\n".join(error_msg), order_info
+            )
+        #background_tasks.add_task(log_error, "\n".join(error_msg), order_info)
 
     else:
         return {"result": "success"}

@@ -84,46 +84,50 @@ def log_order_message(exchange_name, order_result: dict, order_info: MarketOrder
             amount = f"{order_info.percent}%"
 
     else:
-        f_name = "수량"
-        amount = None
-        if exchange_name in ("KRX", "NASDAQ", "AMEX", "NYSE"):
-            if order_info.amount is not None:
-                amount = str(order_info.amount)
-            elif order_info.percent is not None:
-                f_name = "비율"
-                amount = f"{order_info.percent}%"
-        elif order_result.get("amount") is None:
-            if order_info.amount is not None:
-                if exchange_name == "OKX":
-                    if order_info.is_futures:
-                        f_name = "계약(수량)"
-                        amount = f"{order_info.amount // order_info.contract_size}({order_info.contract_size * (order_info.amount // order_info.contract_size)})"
-                    else:
-                        amount = f"{order_info.amount}"
-                else:
+        try:
+            f_name = "수량"
+            amount = None
+            if exchange_name in ("KRX", "NASDAQ", "AMEX", "NYSE"):
+                if order_info.amount is not None:
                     amount = str(order_info.amount)
-            elif order_info.percent is not None:
-                if order_info.amount_by_percent is not None:
-                    f_name = "비율(수량)" if order_info.is_contract is None else "비율(계약)"
-                    amount = f"{order_info.percent}%({order_info.amount_by_percent})"
-                else:
+                elif order_info.percent is not None:
                     f_name = "비율"
                     amount = f"{order_info.percent}%"
-        elif order_result.get("amount") is not None:
-            if order_info.contract_size is not None:
-                f_name = "계약"
-                if order_result.get("cost") is not None:
-                    f_name = "계약(비용)"
-                    amount = f"{order_result.get('amount')}({order_result.get('cost'):.2f})"
-                else:
-                    amount = f"{order_result.get('amount')}"
-            else:
+            elif order_result.get("amount") is None:
                 if order_info.amount is not None:
-                    f_name = "수량"
-                    amount = f"{order_result.get('amount')}"
+                    if exchange_name == "OKX":
+                        if order_info.is_futures:
+                            f_name = "계약(수량)"
+                            amount = f"{order_info.amount // order_info.contract_size}({order_info.contract_size * (order_info.amount // order_info.contract_size)})"
+                        else:
+                            amount = f"{order_info.amount}"
+                    else:
+                        amount = str(order_info.amount)
                 elif order_info.percent is not None:
-                    f_name = "비율(수량)" if order_info.is_contract is None else "비율(계약)"
-                    amount = f"{order_info.percent}%({order_result.get('amount')})"
+                    if order_info.amount_by_percent is not None:
+                        f_name = "비율(수량)" if order_info.is_contract is None else "비율(계약)"
+                        amount = f"{order_info.percent}%({order_info.amount_by_percent})"
+                    else:
+                        f_name = "비율"
+                        amount = f"{order_info.percent}%"
+            elif order_result.get("amount") is not None:
+                if order_info.contract_size is not None:
+                    f_name = "계약"
+                    if order_result.get("cost") is not None:
+                        f_name = "계약(비용)"
+                        amount = f"{order_result.get('amount')}({order_result.get('cost'):.2f})"
+                    else:
+                        amount = f"{order_result.get('amount')}"
+                else:
+                    if order_info.amount is not None:
+                        f_name = "수량"
+                        amount = f"{order_result.get('amount')}"
+                    elif order_info.percent is not None:
+                        f_name = "비율(수량)" if order_info.is_contract is None else "비율(계약)"
+                        amount = f"{order_info.percent}%({order_result.get('amount')})"
+        except Exception as e:
+            print(e)
+            amount = "None"
 
     symbol = f"{order_info.base}/{order_info.quote+'.P' if order_info.is_crypto and order_info.is_futures else order_info.quote}"
 
