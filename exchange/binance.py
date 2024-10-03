@@ -53,7 +53,11 @@ class Binance:
         return order_type in stop_types or 'STOP' in order_type    
 
     def get_stop_orders(self, symbol):
-        open_orders = self.client.fetch_open_orders(symbol)
+        try:
+            open_orders = self.client.fetch_open_orders(symbol)
+        except Exception as e:
+            print(f"Error fetching open orders: {str(e)}")
+            return []
         return [order for order in open_orders if self.is_stop_order(order)]
 
     def cancel_order(self, order_id, symbol):
@@ -76,6 +80,7 @@ class Binance:
         try:
             print("Changing SL order")
             symbol = order_info.unified_symbol
+            sl_price = order_info.sl_price
             position = self.get_position(symbol)
             position_amt = float(position['info'].get('positionAmt', 0))
             print(f"Position: {position}")
@@ -83,16 +88,24 @@ class Binance:
                 print(f"No open position for {symbol}")
                 return None
 
-            
-            stop_orders = self.get_stop_orders(symbol)
-            print(f"Stop orders: {stop_orders}")
-            for order in stop_orders:
-                self.cancel_order(order['id'], symbol)
-                print(f"Cancelled existing stop order: {order['id']}")
+            try:
+                stop_orders = self.get_stop_orders(symbol)
+                if not stop_orders:
+                    pass
+                    print(f"No existing stop orders for {symbol}")
+                else:    
+                    print(f"Stop orders: {stop_orders}")
+                    for order in stop_orders:
+                        self.cancel_order(order['id'], symbol)
+                        print(f"Cancelled existing stop order: {order['id']}")
+            except Exception as e:
+                print(f"Error cancelling existing stop orders: {str(e)}")
                 
             side = 'sell' if position_amt > 0 else 'buy'
-    
-            new_stop_price = position['entryPrice']
+            if sl_price is None:
+                new_stop_price = position['entryPrice']
+            else:
+                new_stop_price = sl_price
             try:
                 new_stop_order = self.create_stop_order(
                     symbol,
@@ -331,7 +344,8 @@ class Binance:
                 instance=self,
             )
         except Exception as e:
-            raise error.OrderError(e, self.order_info)
+            print(f"Error creating market order: {str(e)}")
+            #raise error.OrderError(e, self.order_info)
 
     def limit_order(self, order_info: LimitOrder):
         from exchange.pexchange import retry
@@ -352,7 +366,8 @@ class Binance:
                 instance=self,
             )
         except Exception as e:
-            raise error.OrderError(e, self.order_info)
+            print(f"Error creating limit order: {str(e)}")
+            raise 
 
     # async def market_order_async(
     #     self,
@@ -395,6 +410,14 @@ class Binance:
         use_tp3 = order_info.use_tp3
         use_tp4 = order_info.use_tp4
         use_sl = order_info.use_sl
+        try:
+            if order_info.entry_price is not None:
+                entry_price = order_info.entry_price
+            else:
+                entry_price = None
+        except:
+            entry_price = None
+        
         round_info = 2
         if "SOL" in symbol:
             round_info = 0
@@ -540,12 +563,14 @@ class Binance:
                     }
                     sl_order = self.create_sl_order_with_retry(symbol, sl_side, abs(entry_amount), sl_price, {'stopPrice': sl_price, 'reduceOnly': True})
             except Exception as e:
-                raise error.OrderError(e, self.order_info)
+                print(f"Error creating SL order: {e}")
+                #raise error.OrderError(e, self.order_info)
 
 
             return result
         except Exception as e:
-            raise error.OrderError(e, self.order_info)
+            print(f"Error creating market entry order: {str(e)}")
+            #raise error.OrderError(e, self.order_info)
 
     def limit_entry(self, order_info: LimitOrder):
         from exchange.pexchange import retry
@@ -582,7 +607,8 @@ class Binance:
             )
             return result
         except Exception as e:
-            raise error.OrderError(e, self.order_info)
+            print(f"Error creating limit entry order: {str(e)}")
+            #raise error.OrderError(e, self.order_info)
 
     def is_hedge_mode(self):
         response = self.client.fapiPrivate_get_positionside_dual()
@@ -671,7 +697,7 @@ class Binance:
         
     def market_all_close(self, order_info: MarketOrder):
         from exchange.pexchange import retry
-
+        position_amt = None
         symbol = self.order_info.unified_symbol
         if self.position_mode == "one-way":
             params = {"reduceOnly": True}
@@ -687,14 +713,19 @@ class Binance:
                 elif order_info.is_close:
                     positionSide = "LONG"
             params = {"positionSide": positionSide}
-            
+        try:
+            position = self.get_position(symbol)
+            position_amt = float(position['info'].get('positionAmt', 0))
+        except Exception as e:
+            print(str(e))
+            return None
         try:
             return retry(
                 self.client.create_order,
                 symbol,
                 order_info.type.lower(),
                 order_info.side,
-                abs(order_info.amount),
+                abs(position_amt),
                 None,
                 params,
                 order_info=order_info,
@@ -703,7 +734,8 @@ class Binance:
                 instance=self,
             )
         except Exception as e:
-            raise error.OrderError(e, self.order_info)
+            print(f"Error creating all market closing order: {str(e)}")
+            #raise error.OrderError(e, self.order_info)
 
     def market_close(
         self,
@@ -743,7 +775,8 @@ class Binance:
                 instance=self,
             )
         except Exception as e:
-            raise error.OrderError(e, self.order_info)
+            print(f"Error creating market close order: {str(e)}")
+            #raise error.OrderError(e, self.order_info)
 
     def get_listen_key(self):
         url = "https://fapi.binance.com/fapi/v1/listenKey"

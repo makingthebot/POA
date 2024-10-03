@@ -210,6 +210,8 @@ def log_hedge_message(exchange, base, quote, exchange_amount, upbit_amount, hedg
 
 
 def log_error_message(error, name):
+    if "'NoneType' object is not subscriptable" in error:
+        return  # 이 오류는 로깅하지 않고 함수를 종료
     embed = Embed(title=f"{name} 에러", description=f"[{name} 에러가 발생했습니다]\n{error}", color=0xFF0000)
     logger.error(f"{name} [에러가 발생했습니다]\n{error}")
     log_message(embed=embed)

@@ -6,6 +6,7 @@ from pathlib import Path
 from enum import Enum
 from devtools import debug
 
+
 CRYPTO_LITERAL = Literal["BINANCE", "UPBIT", "BYBIT", "BITGET", "OKX"]
 
 
@@ -128,65 +129,74 @@ class Settings(BaseSettings):
 
 
 def get_extra_order_info(order_info):
-    extra_order_info = {
-        "is_futures": None,
-        "is_crypto": None,
-        "is_stock": None,
-        "is_spot": None,
-        "is_entry": None,
-        "is_limit": None,
-        "is_close": None,
-        "is_buy": None,
-        "is_sell": None,
-        "is_tp_order": None,
-        "is_sl_order": None,
-        "is_change_sl": None,
-    }
-    if order_info["exchange"] in CRYPTO_EXCHANGES:
-        extra_order_info["is_crypto"] = True
-        if any([order_info["quote"].endswith(code) for code in crypto_futures_code]):
-            extra_order_info["is_futures"] = True
-        else:
-            extra_order_info["is_spot"] = True
-
-    elif order_info["exchange"] in STOCK_EXCHANGES:
-        extra_order_info["is_stock"] = True
     try:
+        extra_order_info = {
+            "is_futures": None,
+            "is_crypto": None,
+            "is_stock": None,
+            "is_spot": None,
+            "is_entry": None,
+            "is_limit": None,
+            "is_close": None,
+            "is_close_all":None,
+            "is_buy": None,
+            "is_sell": None,
+            "is_tp_order": None,
+            "is_sl_order": None,
+            "is_change_sl": None,
+        }
+
+        if order_info["exchange"] in CRYPTO_EXCHANGES:
+            extra_order_info["is_crypto"] = True
+            if any([order_info["quote"].endswith(code) for code in crypto_futures_code]):
+                extra_order_info["is_futures"] = True
+            else:
+                extra_order_info["is_spot"] = True
+
+        elif order_info["exchange"] in STOCK_EXCHANGES:
+            extra_order_info["is_stock"] = True
+
         if order_info.get("type") == "limit":
             extra_order_info["is_limit"] = True
         if any(order_info.get(f"use_tp{i}") for i in range(1, 5)):
             extra_order_info["is_tp_order"] = True
             
-        #if order_info.get("order_name", "").lower() in ["change sl order", "change_sl"]:
-        #    print("order_info order_name : ", order_info.get("order_name"))
-        #    print("🟡🟡change_sl. order_info", order_info)
-        #    extra_order_info["is_change_sl"] = True
+        if order_info.get("order_name", "").lower() in ["change sl order", "change_sl", "Change SL Order"]:
+            print("order_info order_name : ", order_info.get("order_name"))
+            print("🟡🟡change_sl. order_info", order_info)
+            extra_order_info["is_change_sl"] = True
         
-            #return extra_order_info
+            return extra_order_info
     except Exception as e:
         print("🟡🟡error!! change_sl. order_info", order_info)
         print("🟡🟡change_sl. e", e)
         return extra_order_info
-    print("side order_info : ", order_info)
-    if "side" in order_info:
-        if order_info["side"] in ("entry/buy", "entry/sell"):
-            extra_order_info["is_entry"] = True
-            _side = order_info["side"].split("/")[-1]
-            if _side == "buy":
+    try:
+        print("side order_info : ", order_info)
+        if "side" in order_info:
+            if order_info["side"] in ("entry/buy", "entry/sell"):
+                extra_order_info["is_entry"] = True
+                _side = order_info["side"].split("/")[-1]
+                if _side == "buy":
+                    extra_order_info["is_buy"] = True
+                elif _side == "sell":
+                    extra_order_info["is_sell"] = True
+            elif order_info["side"] in ("close/buy", "close/sell"):
+                extra_order_info["is_close"] = True
+                _side = order_info["side"].split("/")[-1]
+                if order_info.get("order_name", "").lower() in ["s tp4", "tp 4", "final", "stop", "tr", "sl", "l tp4", "tp4"]:
+                    extra_order_info["is_close_all"] = True 
+
+                if _side == "buy":
+                    extra_order_info["is_buy"] = True
+                elif _side == "sell":
+                    extra_order_info["is_sell"] = True
+            elif order_info["side"] == "buy":
                 extra_order_info["is_buy"] = True
-            elif _side == "sell":
+            elif order_info["side"] == "sell":
                 extra_order_info["is_sell"] = True
-        elif order_info["side"] in ("close/buy", "close/sell"):
-            extra_order_info["is_close"] = True
-            _side = order_info["side"].split("/")[-1]
-            if _side == "buy":
-                extra_order_info["is_buy"] = True
-            elif _side == "sell":
-                extra_order_info["is_sell"] = True
-        elif order_info["side"] == "buy":
-            extra_order_info["is_buy"] = True
-        elif order_info["side"] == "sell":
-            extra_order_info["is_sell"] = True
+    except Exception as e:
+        print(e)
 
 
     return extra_order_info
@@ -233,6 +243,7 @@ class OrderRequest(BaseModel):
     is_entry: bool | None = None
     is_limit: bool | None = None
     is_close: bool | None = None
+    is_close_all : bool | None = None
     is_change_sl: bool | None = None
     use_tp1: bool | None = None
     use_tp2: bool | None = None
@@ -246,6 +257,7 @@ class OrderRequest(BaseModel):
     tp2_price: float | None = None
     tp3_price: float | None = None
     tp4_price: float | None = None
+    entry_price: float | None = None
     use_sl: bool | None = None
     sl_price: float | None = None
     entry_candle : int | None = None
@@ -262,12 +274,22 @@ class OrderRequest(BaseModel):
 
     @root_validator(pre=True)
     def root_validate(cls, values):
+        print("Starting root_validate")
+        print("Type of values: %s", type(values))
+        print(f"Content of values: {values}")
+        print(f"🔶🟣eee {values}")
+        if not values:
+            print("values is empty or None")
+            return values
         # "NaN" to None
         for key, value in values.items():
             if value in ("NaN", ""):
                 values[key] = None
 
-        values |= get_extra_order_info(values)
+        extra_info = get_extra_order_info(values)
+        values.update(extra_info)
+        print("Final values after root_validate:", values)
+        #values |= get_extra_order_info(values) <-- 원래 포아봇 . 
 
         # 'side'가 있을 때만 처리
         if 'side' in values and values['side'] is not None:

@@ -23,12 +23,14 @@ from exchange.utility import (
     log_message,
 )
 import traceback
-from exchange import get_exchange, log_message, db, settings, get_bot, pocket
+from exchange.database import db
+from exchange import log_message, settings, pocket
+from exchange.pexchange import get_bot, get_exchange
 import ipaddress
 import os
 import sys
 
-VERSION = "0.1.5"
+VERSION = "0.1.8"
 app = FastAPI(default_response_class=ORJSONResponse)
 
 
@@ -119,11 +121,12 @@ async def validation_exception_handler(request, exc):
         msgs = [
             f"[에러{index+1}] {error.get('msg', 'Unknown error')}\n{'.'.join(map(str, error.get('loc', [])))}"
             for index, error in enumerate(exc.errors())
+            if "value is not a valid" not in error.get('msg', '')
         ]
         message = "[Error]\n" + "\n".join(msgs)
 
-        #if msgs:  # 에러 메시지가 있을 때만 로깅
-        #    log_validation_error_message(f"{message}\n요청 바디: {exc.body}")
+        if msgs:  # 에러 메시지가 있을 때만 로깅
+            log_validation_error_message(f"{message}")
     except Exception as e:
         log_error_message(traceback.format_exc(), "유효성 검사 에러")
     return await request_validation_exception_handler(request, exc)
@@ -170,20 +173,24 @@ def order(order_info: Union[MarketOrder, ChangeSLOrder], background_tasks: Backg
         if bot.order_info.is_crypto:
             try:
                 print('order_info :⭐️ ', order_info)
-                #if (bot.order_info.is_change_sl is not None) :
-                #    print("change_sl_order❗️❤️")
-                #    order_result = bot.change_sl_order(bot.order_info)
-                #    background_tasks.add_task(log, exchange_name, order_result, order_info)
-                #    return {"result": "success"}
+                if (bot.order_info.is_change_sl is not None) :
+                    print("change_sl_order❗️❤️")
+                    order_result = bot.change_sl_order(bot.order_info)
+                    background_tasks.add_task(log, exchange_name, order_result, order_info)
+                    return {"result": "success"}
                 if bot.order_info.is_entry:
-                    #print(f"is_change_sl 🦈🦈: {bot.order_info.is_change_sl}")
+                    print(f"is_change_sl 🦈🦈: {bot.order_info.is_change_sl}")
                     try:
                         order_result = bot.market_entry(bot.order_info)
                     except Exception as e:
                         print(e)
                         traceback.print_exc()
+                
                 elif bot.order_info.is_close:
-                    order_result = bot.market_close(bot.order_info)
+                    if bot.order_info.is_close_all:
+                        order_result = bot.market_all_close(bot.order_info)
+                    else:
+                        order_result = bot.market_close(bot.order_info)
                 elif bot.order_info.is_buy:
                     order_result = bot.market_buy(bot.order_info)
                 elif bot.order_info.is_sell:
@@ -203,9 +210,9 @@ def order(order_info: Union[MarketOrder, ChangeSLOrder], background_tasks: Backg
                 order_info.side.lower(),
                 order_info.amount,
             )
-        #elif isinstance(order_info, ChangeSLOrder):
-        #    # 여기에 change_sl_order 처리 로직을 추가합니다.
-        #    order_result = bot.change_sl_order(order_info)
+        elif isinstance(order_info, ChangeSLOrder):
+            # 여기에 change_sl_order 처리 로직을 추가합니다.
+            order_result = bot.change_sl_order(order_info)
         background_tasks.add_task(log, exchange_name, order_result, order_info)
 
     except TypeError as e:
