@@ -362,7 +362,7 @@ class Binance:
                 params,
                 order_info=order_info,
                 max_attempts=5,
-                delay=0.1,
+                delay=0.4,
                 instance=self,
             )
         except Exception as e:
@@ -419,10 +419,15 @@ class Binance:
             entry_price = None
         
         round_info = 2
+        price_decimal = 4
         if "SOL" in symbol:
-            round_info = 0
+            round_info = 1
+            price_decimal = 3
         elif "BTC" in symbol:
             round_info = 3
+            price_decimal = 2
+        elif "ETH" in symbol:
+            price_decimal = 3
         if use_tp1:
             tp1_price = order_info.tp1_price
             tp1_qty_percent = order_info.tp1_qty_percent
@@ -537,6 +542,11 @@ class Binance:
                     print(f"Processing TP: use_tp={use_tp}, tp_price={tp_price}, tp_qty={tp_qty}")
                     tp_price = tp_price[1] if isinstance(tp_price, tuple) else tp_price
                     if use_tp and tp_price and tp_qty > 0:
+                        if "SOL" in symbol:
+                            tp_price = round(tp_price, price_decimal)
+                        elif "ADA" in symbol:
+                            tp_price = round(tp_price, 4)
+                        
                         tp_side = "buy" if order_info.side == "sell" else "sell"
                         positionSide = "SHORT" if order_info.side == "sell" else "LONG"
                         tp_params = {
@@ -550,6 +560,7 @@ class Binance:
                     else:
                         print(f"Skipping TP order: use_tp={use_tp}, tp_price={tp_price}, tp_qty={tp_qty}")
             except Exception as e:
+    
                 print(f"Error creating TP orders: {e}")
                 #raise error.OrderError(e, self.order_info)
             try:
