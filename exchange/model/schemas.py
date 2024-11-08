@@ -327,6 +327,8 @@ class OrderBase(OrderRequest):
         return v
 
 class ChangeSLOrder(OrderBase):
+    price: float | None = None
+    sl_price: float | None = None
     type: Literal["change_sl"] = "change_sl"
     
 
