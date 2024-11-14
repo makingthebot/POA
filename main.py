@@ -30,7 +30,7 @@ import ipaddress
 import os
 import sys
 
-VERSION = "0.1.8"
+VERSION = "0.1.9"
 app = FastAPI(default_response_class=ORJSONResponse)
 
 
